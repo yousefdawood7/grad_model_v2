@@ -1,5 +1,3 @@
-
-
 import io
 import time
 import numpy as np
@@ -9,31 +7,37 @@ from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 
+# ============================================
+# CONFIG
+# ============================================
 
 IMAGE_SIZE = (224, 224)
-
 THRESHOLD = 0.5
 
-MODEL_PATH = "model.keras"
+# ============================================
+# FASTAPI APP
+# ============================================
+
+app = FastAPI()
+
+# ============================================
+# LOAD MODEL ONCE
+# ============================================
 
 print("Loading model...")
 
 model = tf.keras.models.load_model(
-    MODEL_PATH,
+    "model.keras",
     compile=False
 )
 
-print("Model loaded successfully.")
+print("Model loaded.")
 
+# ============================================
+# PREPROCESS
+# ============================================
 
-app = FastAPI(
-    title="Water Hyacinth Detection API",
-    description="Detect water hyacinth from uploaded images 🌿",
-    version="1.0.0"
-)
-
-
-def preprocess_image(image: Image.Image):
+def preprocess_image(image):
 
     image = image.convert("RGB")
 
@@ -47,15 +51,20 @@ def preprocess_image(image: Image.Image):
 
     return image
 
+# ============================================
+# ROOT
+# ============================================
 
 @app.get("/")
-def home():
+def root():
 
     return {
-        "message": "Water Hyacinth Detection API 🌿",
-        "status": "running"
+        "message": "Water Hyacinth API 🌿"
     }
 
+# ============================================
+# HEALTH CHECK
+# ============================================
 
 @app.get("/health")
 def health():
@@ -64,25 +73,27 @@ def health():
         "status": "healthy"
     }
 
+# ============================================
+# PREDICT
+# ============================================
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
 
-    start_time = time.time()
-
+    start = time.time()
 
     if not file.content_type.startswith("image/"):
 
         raise HTTPException(
             status_code=400,
-            detail="Uploaded file must be an image."
+            detail="File must be an image"
         )
 
     try:
+
         contents = await file.read()
 
         image = Image.open(io.BytesIO(contents))
-
 
         processed = preprocess_image(image)
 
@@ -105,22 +116,18 @@ async def predict(file: UploadFile = File(...)):
             else 1 - prediction
         )
 
-        inference_time = round(
-            time.time() - start_time,
-            3
-        )
-
         return {
 
             "prediction": predicted_class,
 
             "probability": round(prediction, 5),
 
-            "confidence": round(float(confidence), 5),
+            "confidence": round(confidence, 5),
 
-            "threshold": THRESHOLD,
-
-            "inference_time_seconds": inference_time
+            "inference_time": round(
+                time.time() - start,
+                3
+            )
         }
 
     except Exception as e:
