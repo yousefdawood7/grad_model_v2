@@ -27,7 +27,7 @@ app = FastAPI()
 print("Loading model...")
 
 model = tf.keras.models.load_model(
-    "model.keras",
+    "/app/model.keras",
     compile=False
 )
 
