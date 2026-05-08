@@ -7,22 +7,10 @@ from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 
-# ============================================
-# CONFIG
-# ============================================
-
 IMAGE_SIZE = (224, 224)
 THRESHOLD = 0.5
 
-# ============================================
-# FASTAPI APP
-# ============================================
-
 app = FastAPI()
-
-# ============================================
-# LOAD MODEL ONCE
-# ============================================
 
 print("Loading model...")
 
@@ -32,10 +20,6 @@ model = tf.keras.models.load_model(
 )
 
 print("Model loaded.")
-
-# ============================================
-# PREPROCESS
-# ============================================
 
 def preprocess_image(image):
 
@@ -51,10 +35,6 @@ def preprocess_image(image):
 
     return image
 
-# ============================================
-# ROOT
-# ============================================
-
 @app.get("/")
 def root():
 
@@ -62,20 +42,12 @@ def root():
         "message": "Water Hyacinth API 🌿"
     }
 
-# ============================================
-# HEALTH CHECK
-# ============================================
-
 @app.get("/health")
 def health():
 
     return {
         "status": "healthy"
     }
-
-# ============================================
-# PREDICT
-# ============================================
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
