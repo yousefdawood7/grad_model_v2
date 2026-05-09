@@ -6,11 +6,20 @@ import tensorflow as tf
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
+from fastapi.middleware.cors import CORSMiddleware
 
 IMAGE_SIZE = (224, 224)
 THRESHOLD = 0.5
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 print("Loading model...")
 
