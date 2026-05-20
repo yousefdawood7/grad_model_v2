@@ -31,36 +31,28 @@ model = tf.keras.models.load_model(
 print("Model loaded.")
 
 def preprocess_image(image):
-
     image = image.convert("RGB")
-
     image = image.resize(IMAGE_SIZE)
-
     image = np.array(image).astype(np.float32)
-
     image = preprocess_input(image)
-
     image = np.expand_dims(image, axis=0)
 
     return image
 
 @app.get("/")
 def root():
-
     return {
         "message": "Water Hyacinth API 🌿"
     }
 
 @app.get("/health")
 def health():
-
     return {
         "status": "healthy"
     }
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-
     start = time.time()
 
     if not file.content_type.startswith("image/"):
@@ -71,18 +63,13 @@ async def predict(file: UploadFile = File(...)):
         )
 
     try:
-
         contents = await file.read()
-
         image = Image.open(io.BytesIO(contents))
-
         processed = preprocess_image(image)
-
         prediction = model.predict(
             processed,
             verbose=0
         )[0][0]
-
         prediction = float(prediction)
 
         predicted_class = (
@@ -98,13 +85,9 @@ async def predict(file: UploadFile = File(...)):
         )
 
         return {
-
             "prediction": predicted_class,
-
             "probability": round(prediction, 5),
-
             "confidence": round(confidence, 5),
-
             "inference_time": round(
                 time.time() - start,
                 3
@@ -112,7 +95,6 @@ async def predict(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-
         raise HTTPException(
             status_code=500,
             detail=str(e)
