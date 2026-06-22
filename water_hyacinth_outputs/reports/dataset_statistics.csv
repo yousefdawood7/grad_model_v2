@@ -1,0 +1,2 @@
+total_classification_images,class_distribution,total_detection_images,total_annotations,avg_boxes_per_image,sources_used
+9627,"{'non_water_hyacinth': 3342, 'water_hyacinth': 6285}",584,590,1.01,"['glendell03/water-hyacinth', 'kalyanitewari/waterhyacinth-a-dataset-of-water-hyacinth-species', 'navsci/water-hyacinth-detection-omno0']"

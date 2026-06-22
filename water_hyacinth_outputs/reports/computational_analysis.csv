@@ -1,0 +1,2 @@
+classifier_inference_time_s_per_batch,classifier_inference_std_s,classifier_params,classifier_gflops,classifier_size_mb,detector_latency_ms,detector_fps,detector_params,detector_gflops,detector_size_mb,system_cpu_percent,system_ram_used_gb,gpu_name,gpu_mem_allocated_gb
+0.14439840316772462,0.02266780517280784,20180050,2.709622784,81.618115,11.216282844543457,89.15609688698997,3005843,4.0425984,6.166959,12.6,10.230460416,Tesla T4,0.982461952

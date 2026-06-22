@@ -1,0 +1,6 @@
+condition,accuracy,n_samples
+bright,0.9875,80
+dark,0.975,80
+noisy,0.9875,80
+rotated,1.0,80
+blurry,0.9875,80

@@ -1,0 +1,4 @@
+image,water_hyacinth_detected,detected_regions,coverage_percent,confidence_percent,risk_level
+water_hyacinth_4_jpg.rf.5e7634af216402f6b8c1597911951ed7.jpg,True,1,99.5,97.1,CRITICAL
+water_hyacinth_763_jpg.rf.be665f8efff82f82c770943642095719.jpg,True,2,74.3,28.2,CRITICAL
+water_hyacinth_1375_jpg.rf.b0ab6288cd1be719b22877ce1cb76c4d.jpg,True,1,87.9,90.7,CRITICAL

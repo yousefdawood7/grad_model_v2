@@ -1,0 +1,5 @@
+source,type,status,n_images,n_annotations,notes,timestamp
+glendell03/water-hyacinth,Kaggle,downloaded,1168,0,cached at /root/.cache/kagglehub/datasets/glendell03/water-hyacinth/versions/1,2026-06-22 14:40:18
+kalyanitewari/waterhyacinth-a-dataset-of-water-hyacinth-species,Kaggle,downloaded,5840,0,cached at /root/.cache/kagglehub/datasets/kalyanitewari/waterhyacinth-a-dataset-of-water-hyacinth-species/versions/1,2026-06-22 14:44:23
+navsci/water-hyacinth-detection-omno0,Roboflow,downloaded,584,0,YOLOv8 format,2026-06-22 14:44:27
+"WaterHyacinth: Comprehensive Image Dataset (Kabir et al., 2024, Bangladesh, 4 species, CC BY 4.0)",Mendeley,unavailable,0,0,HTTP 403 from Mendeley API,2026-06-22 14:44:27
