@@ -4,10 +4,11 @@ __pycache__/
 venv/
 .env
 model.keras
-*.pth
-*.pt
 *.onnx
+water_hyacinth_outputs/
 models/*
 !models/.gitkeep
+!models/best_classifier.pth
+!models/best_detector.pt
 .streamlit/secrets.toml
 .DS_Store

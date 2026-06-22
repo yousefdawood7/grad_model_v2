@@ -7,5 +7,4 @@ env/
 venv/
 .git
 .gitignore
-models/
 water_hyacinth_outputs/
