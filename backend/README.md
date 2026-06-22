@@ -24,6 +24,7 @@ With the default configuration, the important routes are:
 - `GET /api/v1/water-hyacinth/health`
 - `POST /api/v1/water-hyacinth/predict`
 - `POST /api/v1/water-hyacinth/predict/batch`
+- `WS /api/v1/water-hyacinth/ws/live-detect`
 - `GET /api/v1/water-hyacinth/docs`
 - `GET /api/v1/water-hyacinth/openapi.json`
 
@@ -34,6 +35,27 @@ If you need a different prefix, set:
 Set `API_PREFIX=/` or an empty value if you want the API mounted at the host root instead.
 
 A static OpenAPI file is also committed at the repo root as `openapi.json`.
+
+## Mobile Client Integration
+
+`POST /predict` now returns:
+
+- classification label and confidence
+- detected region count and mean detection confidence
+- coverage percentage and risk level
+- original image width and height
+- `boxes` containing YOLO pixel coordinates for overlay rendering
+
+`WS /ws/live-detect` accepts JSON frames like:
+
+```json
+{
+  "frame_id": "frame-42",
+  "image_base64": "<base64-encoded-jpeg-or-png>"
+}
+```
+
+It responds with the same prediction payload plus the echoed `frame_id`, which is enough for a React Native camera view to draw live borders around detections.
 
 ## Weight Distribution Options
 
@@ -82,18 +104,18 @@ From the repo root:
 
 ```bash
 pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.app.main:app --host 0.0.0.0 --port 3000 --reload
 ```
 
 Then open:
 
-- `http://localhost:8000/api/v1/water-hyacinth/health`
-- `http://localhost:8000/api/v1/water-hyacinth/docs`
+- `http://localhost:3000/api/v1/water-hyacinth/health`
+- `http://localhost:3000/api/v1/water-hyacinth/docs`
 
 ## API Endpoints
 
 - `GET /api/v1/water-hyacinth` base-path discovery
 - `GET /api/v1/water-hyacinth/health` readiness and model-load status
-- `POST /api/v1/water-hyacinth/predict` single-image prediction
-- `POST /api/v1/water-hyacinth/predict/batch` multi-image prediction
-
+- `POST /api/v1/water-hyacinth/predict` single-image prediction with boxes
+- `POST /api/v1/water-hyacinth/predict/batch` multi-image prediction with boxes
+- `WS /api/v1/water-hyacinth/ws/live-detect` live frame-by-frame detection

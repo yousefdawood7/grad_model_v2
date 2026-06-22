@@ -7,9 +7,9 @@ This repo is set up for a split deployment:
 
 The backend defaults to the `/api/v1/water-hyacinth` base path. On EC2, your usable URLs look like:
 
-- `http://<ec2-public-ip>:8000/api/v1/water-hyacinth/health`
-- `http://<ec2-public-ip>:8000/api/v1/water-hyacinth/docs`
-- `http://<ec2-public-ip>:8000/api/v1/water-hyacinth/openapi.json`
+- `http://<ec2-public-ip>:3000/api/v1/water-hyacinth/health`
+- `http://<ec2-public-ip>:3000/api/v1/water-hyacinth/docs`
+- `http://<ec2-public-ip>:3000/api/v1/water-hyacinth/openapi.json`
 
 ## 1. Prepare the weight files
 
@@ -35,7 +35,7 @@ Choose one distribution method before you deploy the backend.
 ## 2. Deploy the backend on EC2 with Docker
 
 1. Launch an Ubuntu EC2 instance.
-2. Allow inbound traffic to port `8000` in the EC2 security group.
+2. Allow inbound traffic to port `3000` in the EC2 security group.
 3. SSH into the instance.
 4. Install Docker.
 5. Clone this repo.
@@ -52,7 +52,7 @@ If you use Hugging Face Hub:
 ```bash
 docker run -d \
   --name water-hyacinth-api \
-  -p 8000:8000 \
+  -p 3000:3000 \
   -e HF_MODEL_REPO=your-name/water-hyacinth-models \
   -e HF_CLASSIFIER_FILENAME=best_classifier.pth \
   -e HF_DETECTOR_FILENAME=best_detector.pt \
@@ -66,7 +66,7 @@ If you use direct asset URLs:
 ```bash
 docker run -d \
   --name water-hyacinth-api \
-  -p 8000:8000 \
+  -p 3000:3000 \
   -e CLASSIFIER_WEIGHTS_URL=https://example.com/best_classifier.pth \
   -e DETECTOR_WEIGHTS_URL=https://example.com/best_detector.pt \
   -e API_PREFIX=/api/v1/water-hyacinth \
@@ -77,14 +77,14 @@ docker run -d \
 8. Verify the service.
 
 ```bash
-curl http://localhost:8000/api/v1/water-hyacinth/health
-curl http://localhost:8000/api/v1/water-hyacinth/openapi.json
+curl http://localhost:3000/api/v1/water-hyacinth/health
+curl http://localhost:3000/api/v1/water-hyacinth/openapi.json
 ```
 
 From your machine, use:
 
 ```text
-http://<ec2-public-ip>:8000/api/v1/water-hyacinth
+http://<ec2-public-ip>:3000/api/v1/water-hyacinth
 ```
 
 ## 3. Deploy the Streamlit frontend
@@ -96,7 +96,7 @@ http://<ec2-public-ip>:8000/api/v1/water-hyacinth
 5. Add the secret below.
 
 ```toml
-API_URL = "http://<ec2-public-ip>:8000/api/v1/water-hyacinth"
+API_URL = "http://<ec2-public-ip>:3000/api/v1/water-hyacinth"
 ```
 
 Important: `API_URL` must include the `/api/v1/water-hyacinth` base path.
@@ -110,14 +110,14 @@ Backend:
 
 ```bash
 pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.app.main:app --host 0.0.0.0 --port 3000 --reload
 ```
 
 Frontend:
 
 ```bash
 pip install -r requirements.txt
-API_URL=http://localhost:8000/api/v1/water-hyacinth streamlit run streamlit_app.py
+API_URL=http://localhost:3000/api/v1/water-hyacinth streamlit run streamlit_app.py
 ```
 
 Then:
@@ -134,4 +134,6 @@ Then:
 - `.streamlit/config.toml`
 - `streamlit_app.py`
 - `openapi.json`
+
+
 

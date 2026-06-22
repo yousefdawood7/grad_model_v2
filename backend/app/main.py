@@ -1,4 +1,4 @@
-"""
+﻿"""
 Water Hyacinth Detection API.
 
 Production-shaped FastAPI service that preserves the exact inference behavior
@@ -8,6 +8,7 @@ hardening for deployment.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -20,13 +21,13 @@ from typing import Any
 import numpy as np
 import requests
 import torch
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from huggingface_hub import hf_hub_download
 from starlette.concurrency import run_in_threadpool
 
-from .schemas import BatchPredictionItem, HealthResponse, PredictionResponse
+from .schemas import BatchPredictionItem, HealthResponse, LiveDetectionResponse, PredictionResponse
 
 LOGGER = logging.getLogger("water_hyacinth_api")
 if not LOGGER.handlers:
@@ -82,12 +83,13 @@ app = FastAPI(
         "This service runs the notebook-derived EfficientNetV2-S classifier and YOLO detector used "
         "for water-hyacinth monitoring. By default it is mounted under `/api/v1/water-hyacinth` so EC2 and "
         "Streamlit deployments can target a stable base path. `/predict` accepts a single JPG/PNG "
-        "image and returns the classification label, confidence, detected region count, coverage "
-        "percentage, and derived risk level. `/predict/batch` applies the same inference pipeline to "
-        "multiple images in one request. Model weights can be mounted locally or downloaded at "
-        "startup from Hugging Face Hub or direct asset URLs."
+        "image and returns the classification label, confidence, detection boxes, coverage percentage, "
+        "and derived risk level. `/predict/batch` applies the same inference pipeline to multiple images "
+        "in one request, and `/ws/live-detect` lets mobile apps stream frames over a websocket and receive "
+        "box coordinates for live overlays. Model weights can be mounted locally or downloaded at startup "
+        "from Hugging Face Hub or direct asset URLs."
     ),
-    version="0.3.0",
+    version="0.4.0",
     docs_url=api_path("/docs"),
     redoc_url=api_path("/redoc"),
     openapi_url=api_path("/openapi.json"),
@@ -169,17 +171,37 @@ def _load_models() -> None:
         classifier.eval().to(device)
         _log_event("model_loaded", model="classifier", path=str(CLASSIFIER_PATH), device=device)
     else:
-        LOGGER.warning("Classifier weights not found at %s; /predict will return 503 until available.", CLASSIFIER_PATH)
+        LOGGER.warning("Classifier weights not found at %s; prediction routes will return 503 until available.", CLASSIFIER_PATH)
 
     if DETECTOR_PATH.exists():
         detector = YOLO(str(DETECTOR_PATH))
         _log_event("model_loaded", model="detector", path=str(DETECTOR_PATH), device=device)
     else:
-        LOGGER.warning("Detector weights not found at %s; /predict will return 503 until available.", DETECTOR_PATH)
+        LOGGER.warning("Detector weights not found at %s; prediction routes will return 503 until available.", DETECTOR_PATH)
 
 
 def _models_ready() -> bool:
     return classifier is not None and detector is not None
+
+
+def _validate_image_bytes(image_bytes: bytes) -> None:
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Uploaded file exceeds the {MAX_UPLOAD_BYTES} byte limit.")
+
+
+def _save_image_bytes(image_bytes: bytes, suffix: str = ".jpg") -> Path:
+    _validate_image_bytes(image_bytes)
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(image_bytes)
+        return Path(tmp.name)
+
+
+def _parse_data_url(data: str) -> bytes:
+    payload = data.split(",", 1)[1] if data.startswith("data:") else data
+    try:
+        return base64.b64decode(payload, validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid base64 image payload.") from exc
 
 
 def _run_inference(image_path: str) -> dict[str, Any]:
@@ -202,9 +224,9 @@ def _run_inference(image_path: str) -> dict[str, Any]:
     result = detector.predict(image_path, conf=DET_CONF_THRESHOLD, verbose=False)[0]
     boxes = result.boxes.xyxy.cpu().numpy() if len(result.boxes) else np.empty((0, 4))
     confs = result.boxes.conf.cpu().numpy() if len(result.boxes) else np.empty((0,))
-    height, width = img.shape[:2]
+    image_height, image_width = img.shape[:2]
     covered = sum((x2 - x1) * (y2 - y1) for x1, y1, x2, y2 in boxes)
-    coverage_pct = min(100.0, 100 * covered / (height * width)) if height * width else 0.0
+    coverage_pct = min(100.0, 100 * covered / (image_height * image_width)) if image_height * image_width else 0.0
     risk = (
         "NONE"
         if coverage_pct == 0
@@ -217,6 +239,19 @@ def _run_inference(image_path: str) -> dict[str, Any]:
         else "CRITICAL"
     )
 
+    serialized_boxes = [
+        {
+            "x1": float(x1),
+            "y1": float(y1),
+            "x2": float(x2),
+            "y2": float(y2),
+            "confidence": float(conf),
+            "width": float(x2 - x1),
+            "height": float(y2 - y1),
+        }
+        for (x1, y1, x2, y2), conf in zip(boxes, confs, strict=False)
+    ]
+
     return {
         "classification": CLASSES[cls_idx],
         "classification_confidence": float(probs[cls_idx]),
@@ -224,6 +259,9 @@ def _run_inference(image_path: str) -> dict[str, Any]:
         "coverage_percent": round(coverage_pct, 1),
         "detection_confidence": float(confs.mean()) if len(confs) else 0.0,
         "risk_level": risk,
+        "image_width": int(image_width),
+        "image_height": int(image_height),
+        "boxes": serialized_boxes,
     }
 
 
@@ -232,30 +270,24 @@ async def _save_upload(upload: UploadFile) -> Path:
         raise HTTPException(status_code=400, detail="Only JPEG/PNG images are supported.")
 
     suffix = Path(upload.filename or "upload.jpg").suffix or ".jpg"
+    chunks: list[bytes] = []
     total_bytes = 0
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        while True:
-            chunk = await upload.read(1024 * 1024)
-            if not chunk:
-                break
-            total_bytes += len(chunk)
-            if total_bytes > MAX_UPLOAD_BYTES:
-                tmp_path.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Uploaded file exceeds the {MAX_UPLOAD_BYTES} byte limit.",
-                )
-            tmp.write(chunk)
+    while True:
+        chunk = await upload.read(1024 * 1024)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"Uploaded file exceeds the {MAX_UPLOAD_BYTES} byte limit.")
+        chunks.append(chunk)
     await upload.close()
-    return tmp_path
+    return _save_image_bytes(b"".join(chunks), suffix=suffix)
 
 
-async def _predict_file(upload: UploadFile, request_id: str) -> dict[str, Any]:
-    tmp_path = await _save_upload(upload)
+async def _predict_from_path(image_path: Path, request_id: str) -> dict[str, Any]:
     try:
         result = await asyncio.wait_for(
-            run_in_threadpool(_run_inference, str(tmp_path)),
+            run_in_threadpool(_run_inference, str(image_path)),
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
     except TimeoutError as exc:
@@ -266,7 +298,7 @@ async def _predict_file(upload: UploadFile, request_id: str) -> dict[str, Any]:
         LOGGER.exception("Inference failed", extra={"request_id": request_id})
         raise HTTPException(status_code=500, detail=f"Inference failed: {exc}") from exc
     finally:
-        tmp_path.unlink(missing_ok=True)
+        image_path.unlink(missing_ok=True)
 
     _log_event(
         "prediction_completed",
@@ -277,6 +309,17 @@ async def _predict_file(upload: UploadFile, request_id: str) -> dict[str, Any]:
         risk_level=result["risk_level"],
     )
     return result
+
+
+async def _predict_file(upload: UploadFile, request_id: str) -> dict[str, Any]:
+    tmp_path = await _save_upload(upload)
+    return await _predict_from_path(tmp_path, request_id)
+
+
+async def _predict_websocket_frame(image_base64: str, request_id: str, suffix: str = ".jpg") -> dict[str, Any]:
+    image_bytes = _parse_data_url(image_base64)
+    tmp_path = _save_image_bytes(image_bytes, suffix=suffix)
+    return await _predict_from_path(tmp_path, request_id)
 
 
 async def _predict_batch(files: list[UploadFile], request_id: str) -> list[BatchPredictionItem]:
@@ -367,7 +410,7 @@ async def root() -> dict[str, str]:
 @app.get(
     API_PREFIX or "/api/v1/water-hyacinth",
     summary="Describe the mounted API base path",
-    description="Returns the base path clients should use for health and prediction routes.",
+    description="Returns the base path clients should use for health, prediction, and websocket routes.",
 )
 async def api_index() -> dict[str, str]:
     return {
@@ -375,6 +418,7 @@ async def api_index() -> dict[str, str]:
         "health": api_path("/health"),
         "predict": api_path("/predict"),
         "predict_batch": api_path("/predict/batch"),
+        "live_detect_websocket": api_path("/ws/live-detect"),
         "openapi": api_path("/openapi.json"),
     }
 
@@ -382,9 +426,10 @@ async def api_index() -> dict[str, str]:
 @app.post(
     api_path("/predict"),
     response_model=PredictionResponse,
-    summary="Predict water-hyacinth coverage for one image",
+    summary="Predict water-hyacinth coverage and bounding boxes for one image",
     description=(
         "Runs the notebook-derived classifier and detector on one uploaded JPG/PNG image. "
+        "The response includes YOLO bounding boxes that mobile or web clients can draw as overlays. "
         "The coverage percentage and risk level are computed with the same formula used in "
         "backend/reference/single_image_prediction.py."
     ),
@@ -400,11 +445,10 @@ async def predict_endpoint(request: Request, file: UploadFile = File(...)) -> Pr
 @app.post(
     api_path("/predict/batch"),
     response_model=list[BatchPredictionItem],
-    summary="Predict water-hyacinth coverage for multiple images",
+    summary="Predict water-hyacinth coverage and bounding boxes for multiple images",
     description=(
         "Applies the same inference pipeline used by `/predict` to a batch of uploaded images. "
-        "This mirrors the reference batch workflow by iterating over each image, skipping failed "
-        "items, and returning successful predictions with their originating filenames."
+        "Each item includes the YOLO bounding boxes needed for frontend overlays."
     ),
 )
 async def predict_batch_endpoint(
@@ -418,6 +462,36 @@ async def predict_batch_endpoint(
     if not results:
         raise HTTPException(status_code=400, detail="No valid predictions were produced for the uploaded files.")
     return results
+
+
+@app.websocket(api_path("/ws/live-detect"))
+async def live_detect_websocket(websocket: WebSocket) -> None:
+    await websocket.accept()
+    request_id = websocket.headers.get("x-request-id", uuid.uuid4().hex)
+
+    if not _models_ready():
+        await websocket.send_json({"detail": "Models not loaded; check server logs and weight configuration."})
+        await websocket.close(code=1013)
+        return
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            frame_id = payload.get("frame_id")
+            image_base64 = payload.get("image_base64")
+            if not image_base64:
+                await websocket.send_json({"frame_id": frame_id, "detail": "image_base64 is required."})
+                continue
+
+            try:
+                prediction = await _predict_websocket_frame(image_base64, request_id)
+            except HTTPException as exc:
+                await websocket.send_json({"frame_id": frame_id, "detail": exc.detail, "status_code": exc.status_code})
+                continue
+
+            await websocket.send_json(LiveDetectionResponse(frame_id=frame_id, **prediction).model_dump())
+    except WebSocketDisconnect:
+        _log_event("websocket_disconnected", request_id=request_id, path=api_path("/ws/live-detect"))
 
 
 @app.get(
@@ -439,4 +513,3 @@ async def health() -> HealthResponse:
         detector_weights=str(DETECTOR_PATH),
         api_prefix=API_PREFIX or "/",
     )
-

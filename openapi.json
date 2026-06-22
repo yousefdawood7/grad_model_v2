@@ -3,8 +3,8 @@
   "info": {
     "title": "Water Hyacinth Detection API",
     "summary": "Classify water-hyacinth presence and estimate coverage risk from uploaded images.",
-    "description": "Notebook-derived EfficientNetV2-S classification plus YOLO detection API for water-hyacinth monitoring. The default deployment base path is /api/v1/water-hyacinth.",
-    "version": "0.3.0"
+    "description": "Notebook-derived EfficientNetV2-S classification plus YOLO detection API for water-hyacinth monitoring. The default deployment base path is /api/v1/water-hyacinth. Still-photo predictions return bounding boxes for overlay rendering.",
+    "version": "0.4.0"
   },
   "servers": [
     {
@@ -16,7 +16,7 @@
     "/api/v1/water-hyacinth": {
       "get": {
         "summary": "Describe the mounted API base path",
-        "description": "Returns the base path clients should use for health and prediction routes.",
+        "description": "Returns the base path clients should use for health, prediction, and websocket routes.",
         "operationId": "api_index_endpoint_get",
         "responses": {
           "200": {
@@ -56,8 +56,8 @@
     },
     "/api/v1/water-hyacinth/predict": {
       "post": {
-        "summary": "Predict water-hyacinth coverage for one image",
-        "description": "Runs the notebook-derived classifier and detector on one uploaded JPG/PNG image.",
+        "summary": "Predict water-hyacinth coverage and bounding boxes for one image",
+        "description": "Runs the notebook-derived classifier and detector on one uploaded JPG or PNG image and returns YOLO boxes for overlay rendering.",
         "operationId": "predict_endpoint_predict_post",
         "requestBody": {
           "required": true,
@@ -102,7 +102,7 @@
     },
     "/api/v1/water-hyacinth/predict/batch": {
       "post": {
-        "summary": "Predict water-hyacinth coverage for multiple images",
+        "summary": "Predict water-hyacinth coverage and bounding boxes for multiple images",
         "description": "Applies the same inference pipeline used by /predict to multiple uploaded images.",
         "operationId": "predict_batch_endpoint_predict_batch_post",
         "requestBody": {
@@ -155,6 +155,19 @@
   },
   "components": {
     "schemas": {
+      "BoundingBox": {
+        "type": "object",
+        "required": ["x1", "y1", "x2", "y2", "confidence", "width", "height"],
+        "properties": {
+          "x1": {"type": "number", "description": "Left pixel coordinate."},
+          "y1": {"type": "number", "description": "Top pixel coordinate."},
+          "x2": {"type": "number", "description": "Right pixel coordinate."},
+          "y2": {"type": "number", "description": "Bottom pixel coordinate."},
+          "confidence": {"type": "number", "description": "Detector confidence for this box."},
+          "width": {"type": "number", "description": "Bounding box width in pixels."},
+          "height": {"type": "number", "description": "Bounding box height in pixels."}
+        }
+      },
       "PredictionResponse": {
         "type": "object",
         "title": "PredictionResponse",
@@ -164,40 +177,30 @@
           "detected_regions",
           "coverage_percent",
           "detection_confidence",
-          "risk_level"
+          "risk_level",
+          "image_width",
+          "image_height",
+          "boxes"
         ],
         "properties": {
-          "classification": {
-            "type": "string",
-            "description": "Predicted top-1 class label."
-          },
-          "classification_confidence": {
-            "type": "number",
-            "description": "Softmax confidence for the predicted class."
-          },
-          "detected_regions": {
-            "type": "integer",
-            "description": "Number of detector bounding boxes returned at conf=0.25."
-          },
-          "coverage_percent": {
-            "type": "number",
-            "description": "Estimated percentage of the image area covered by detections."
-          },
-          "detection_confidence": {
-            "type": "number",
-            "description": "Mean confidence across detected regions, or 0 when none exist."
-          },
-          "risk_level": {
-            "type": "string",
-            "description": "NONE | LOW | MEDIUM | HIGH | CRITICAL"
+          "classification": {"type": "string", "description": "Predicted top-1 class label."},
+          "classification_confidence": {"type": "number", "description": "Softmax confidence for the predicted class."},
+          "detected_regions": {"type": "integer", "description": "Number of detector bounding boxes returned at conf=0.25."},
+          "coverage_percent": {"type": "number", "description": "Estimated percentage of the image area covered by detections."},
+          "detection_confidence": {"type": "number", "description": "Mean confidence across detected regions, or 0 when none exist."},
+          "risk_level": {"type": "string", "description": "NONE | LOW | MEDIUM | HIGH | CRITICAL"},
+          "image_width": {"type": "integer", "description": "Original image width in pixels."},
+          "image_height": {"type": "integer", "description": "Original image height in pixels."},
+          "boxes": {
+            "type": "array",
+            "description": "Detected YOLO bounding boxes for rendering overlays.",
+            "items": {"$ref": "#/components/schemas/BoundingBox"}
           }
         }
       },
       "BatchPredictionItem": {
         "allOf": [
-          {
-            "$ref": "#/components/schemas/PredictionResponse"
-          },
+          {"$ref": "#/components/schemas/PredictionResponse"},
           {
             "type": "object",
             "required": ["image"],
@@ -213,37 +216,15 @@
       "HealthResponse": {
         "type": "object",
         "title": "HealthResponse",
-        "required": [
-          "status",
-          "device",
-          "classifier_loaded",
-          "detector_loaded",
-          "classifier_weights",
-          "detector_weights",
-          "api_prefix"
-        ],
+        "required": ["status", "device", "classifier_loaded", "detector_loaded", "classifier_weights", "detector_weights", "api_prefix"],
         "properties": {
-          "status": {
-            "type": "string"
-          },
-          "device": {
-            "type": "string"
-          },
-          "classifier_loaded": {
-            "type": "boolean"
-          },
-          "detector_loaded": {
-            "type": "boolean"
-          },
-          "classifier_weights": {
-            "type": "string"
-          },
-          "detector_weights": {
-            "type": "string"
-          },
-          "api_prefix": {
-            "type": "string"
-          }
+          "status": {"type": "string"},
+          "device": {"type": "string"},
+          "classifier_loaded": {"type": "boolean"},
+          "detector_loaded": {"type": "boolean"},
+          "classifier_weights": {"type": "string"},
+          "detector_weights": {"type": "string"},
+          "api_prefix": {"type": "string"}
         }
       },
       "ValidationError": {
@@ -259,12 +240,8 @@
               ]
             }
           },
-          "msg": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
+          "msg": {"type": "string"},
+          "type": {"type": "string"}
         }
       },
       "HTTPValidationError": {
@@ -272,13 +249,10 @@
         "properties": {
           "detail": {
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            }
+            "items": {"$ref": "#/components/schemas/ValidationError"}
           }
         }
       }
     }
   }
 }
-

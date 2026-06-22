@@ -38,7 +38,7 @@ def test_health_reports_unloaded_models(client: TestClient) -> None:
     assert payload["api_prefix"] == (main.API_PREFIX or "/")
 
 
-def test_predict_returns_mocked_inference_result(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_predict_returns_mocked_inference_result_with_boxes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     main.classifier = object()
     main.detector = object()
     expected = {
@@ -48,6 +48,19 @@ def test_predict_returns_mocked_inference_result(client: TestClient, monkeypatch
         "coverage_percent": 41.6,
         "detection_confidence": 0.77,
         "risk_level": "HIGH",
+        "image_width": 640,
+        "image_height": 480,
+        "boxes": [
+            {
+                "x1": 10.0,
+                "y1": 20.0,
+                "x2": 110.0,
+                "y2": 120.0,
+                "confidence": 0.87,
+                "width": 100.0,
+                "height": 100.0,
+            }
+        ],
     }
     monkeypatch.setattr(main, "_run_inference", lambda _: expected)
 
@@ -75,6 +88,9 @@ def test_predict_batch_returns_results_for_each_uploaded_file(
         "coverage_percent": 0.0,
         "detection_confidence": 0.0,
         "risk_level": "NONE",
+        "image_width": 640,
+        "image_height": 480,
+        "boxes": [],
     }
     monkeypatch.setattr(main, "_run_inference", lambda _: expected)
 
@@ -100,3 +116,50 @@ def test_root_describes_prefixed_api(client: TestClient) -> None:
     payload = response.json()
     assert payload["api_prefix"] == (main.API_PREFIX or "/")
     assert payload["openapi_url"] == main.api_path("/openapi.json")
+
+
+def test_api_index_describes_live_detect_websocket(client: TestClient) -> None:
+    response = client.get(main.API_PREFIX or "/api/v1/water-hyacinth")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["live_detect_websocket"] == main.api_path("/ws/live-detect")
+
+
+def test_live_detect_websocket_returns_boxes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    main.classifier = object()
+    main.detector = object()
+    expected = {
+        "classification": "water_hyacinth",
+        "classification_confidence": 0.94,
+        "detected_regions": 1,
+        "coverage_percent": 22.9,
+        "detection_confidence": 0.89,
+        "risk_level": "MEDIUM",
+        "image_width": 720,
+        "image_height": 1280,
+        "boxes": [
+            {
+                "x1": 55.0,
+                "y1": 210.0,
+                "x2": 410.0,
+                "y2": 670.0,
+                "confidence": 0.89,
+                "width": 355.0,
+                "height": 460.0,
+            }
+        ],
+    }
+
+    async def fake_predict_websocket_frame(image_base64: str, request_id: str, suffix: str = ".jpg"):
+        assert image_base64
+        assert request_id
+        return expected
+
+    monkeypatch.setattr(main, "_predict_websocket_frame", fake_predict_websocket_frame)
+
+    with client.websocket_connect(main.api_path("/ws/live-detect")) as websocket:
+        websocket.send_json({"frame_id": "frame-1", "image_base64": base64.b64encode(PNG_BYTES).decode("utf-8")})
+        payload = websocket.receive_json()
+
+    assert payload == {"frame_id": "frame-1", **expected}
