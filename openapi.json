@@ -153,6 +153,76 @@
       }
     }
   },
+  "x-websockets": {
+    "/api/v1/water-hyacinth/ws/live-detect": {
+      "summary": "Live frame-by-frame water-hyacinth detection",
+      "description": "WebSocket endpoint for mobile or web camera streams. Send one base64-encoded frame per message and receive YOLO boxes plus classification output for overlay rendering.",
+      "connect": {
+        "url": "ws://<host>:3000/api/v1/water-hyacinth/ws/live-detect",
+        "headers": {
+          "x-request-id": {
+            "type": "string",
+            "required": false,
+            "description": "Optional request correlation id."
+          }
+        }
+      },
+      "receive": {
+        "contentType": "application/json",
+        "schema": {
+          "$ref": "#/components/schemas/LiveDetectionFrameRequest"
+        },
+        "examples": [
+          {
+            "frame_id": "frame-42",
+            "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
+          }
+        ]
+      },
+      "send": {
+        "contentType": "application/json",
+        "schema": {
+          "$ref": "#/components/schemas/LiveDetectionResponse"
+        },
+        "examples": [
+          {
+            "frame_id": "frame-42",
+            "classification": "water_hyacinth",
+            "classification_confidence": 0.94,
+            "detected_regions": 1,
+            "coverage_percent": 22.9,
+            "detection_confidence": 0.89,
+            "risk_level": "MEDIUM",
+            "image_width": 720,
+            "image_height": 1280,
+            "boxes": [
+              {
+                "x1": 55.0,
+                "y1": 210.0,
+                "x2": 410.0,
+                "y2": 670.0,
+                "confidence": 0.89,
+                "width": 355.0,
+                "height": 460.0
+              }
+            ]
+          }
+        ]
+      },
+      "errorMessages": [
+        {
+          "detail": "image_base64 is required."
+        },
+        {
+          "detail": "Invalid base64 image payload.",
+          "status_code": 400
+        },
+        {
+          "detail": "Models not loaded; check server logs and weight configuration."
+        }
+      ]
+    }
+  },
   "components": {
     "schemas": {
       "BoundingBox": {
@@ -208,6 +278,35 @@
               "image": {
                 "type": "string",
                 "description": "Original uploaded filename associated with this prediction."
+              }
+            }
+          }
+        ]
+      },
+      "LiveDetectionFrameRequest": {
+        "type": "object",
+        "required": ["image_base64"],
+        "properties": {
+          "frame_id": {
+            "type": "string",
+            "description": "Optional client-side frame identifier echoed back by the server."
+          },
+          "image_base64": {
+            "type": "string",
+            "description": "Base64-encoded JPEG or PNG frame. Data URLs are also accepted."
+          }
+        }
+      },
+      "LiveDetectionResponse": {
+        "allOf": [
+          {"$ref": "#/components/schemas/PredictionResponse"},
+          {
+            "type": "object",
+            "properties": {
+              "frame_id": {
+                "type": "string",
+                "nullable": true,
+                "description": "Client-provided frame identifier echoed back by the websocket."
               }
             }
           }
