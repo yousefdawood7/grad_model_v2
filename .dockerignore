@@ -7,5 +7,5 @@ env/
 venv/
 .git
 .gitignore
-dataset/
-sample_data/
+models/
+water_hyacinth_outputs/

@@ -1,0 +1,12 @@
+fastapi==0.115.*
+uvicorn[standard]==0.30.*
+python-multipart==0.0.*
+torch>=2.2
+torchvision>=0.17
+timm
+ultralytics==8.3.*
+opencv-python-headless
+numpy
+pydantic>=2
+requests>=2.32
+huggingface_hub>=0.24

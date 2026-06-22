@@ -1,1 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
 model.keras
+*.pth
+*.pt
+*.onnx
+models/*
+!models/.gitkeep
+.streamlit/secrets.toml
+.DS_Store

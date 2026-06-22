@@ -1,7 +1,2 @@
-fastapi
-uvicorn[standard]
-tensorflow-cpu==2.20.0
-keras==3.13.2
-numpy
-pillow
-python-multipart
+streamlit>=1.36
+requests>=2.32
