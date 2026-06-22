@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend deps and test tools
+        run: pip install -r backend/requirements.txt pytest
+
+      - name: Import sanity check
+        run: python -c "import backend.app.main"
+
+      - name: Run backend tests
+        run: pytest backend/tests -q
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check backend streamlit_app.py
