@@ -9,14 +9,14 @@ Run locally:
     streamlit run streamlit_app.py
 
 Configure the backend location via Streamlit secrets or an env var:
-    API_URL=https://your-backend-host/endpoint
+    API_URL=https://your-backend-host/api/v1/water-hyacinth
 """
 import os
 
 import requests
 import streamlit as st
 
-API_URL = st.secrets.get("API_URL", os.getenv("API_URL", "http://localhost:8000/endpoint"))
+API_URL = st.secrets.get("API_URL", os.getenv("API_URL", "http://localhost:8000/api/v1/water-hyacinth"))
 PREDICT_ENDPOINT = f"{API_URL.rstrip('/')}/predict"
 HEALTH_ENDPOINT = f"{API_URL.rstrip('/')}/health"
 
@@ -62,3 +62,4 @@ if uploaded:
                 st.markdown(f"### Risk Level: :{risk_colors.get(risk, 'gray')}[{risk}]")
                 st.metric("Coverage", f"{result.get('coverage_percent', 0)}%")
                 st.metric("Detected regions", result.get("detected_regions", 0))
+

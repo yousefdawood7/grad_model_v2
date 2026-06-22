@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CLASSIFIER_WEIGHTS=/srv/models/best_classifier.pth \
     DETECTOR_WEIGHTS=/srv/models/best_detector.pt \
-    API_PREFIX=/endpoint \
+    API_PREFIX=/api/v1/water-hyacinth \
     PORT=8000
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,5 +22,6 @@ COPY models ./models
 COPY openapi.json ./openapi.json
 
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/endpoint/health')"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/water-hyacinth/health')"
 CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+

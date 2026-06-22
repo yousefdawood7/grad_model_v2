@@ -44,7 +44,7 @@ MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "16"))
 DOWNLOAD_TIMEOUT_SECONDS = int(os.getenv("DOWNLOAD_TIMEOUT_SECONDS", "120"))
 ALLOW_ORIGINS = [origin.strip() for origin in os.getenv("ALLOW_ORIGINS", "*").split(",") if origin.strip()]
-RAW_API_PREFIX = os.getenv("API_PREFIX", "/endpoint").strip()
+RAW_API_PREFIX = os.getenv("API_PREFIX", "/api/v1/water-hyacinth").strip()
 
 if RAW_API_PREFIX in {"", "/"}:
     API_PREFIX = ""
@@ -80,7 +80,7 @@ app = FastAPI(
     summary="Classify water-hyacinth presence and estimate coverage risk from uploaded images.",
     description=(
         "This service runs the notebook-derived EfficientNetV2-S classifier and YOLO detector used "
-        "for water-hyacinth monitoring. By default it is mounted under `/endpoint` so EC2 and "
+        "for water-hyacinth monitoring. By default it is mounted under `/api/v1/water-hyacinth` so EC2 and "
         "Streamlit deployments can target a stable base path. `/predict` accepts a single JPG/PNG "
         "image and returns the classification label, confidence, detected region count, coverage "
         "percentage, and derived risk level. `/predict/batch` applies the same inference pipeline to "
@@ -365,7 +365,7 @@ async def root() -> dict[str, str]:
 
 
 @app.get(
-    API_PREFIX or "/endpoint",
+    API_PREFIX or "/api/v1/water-hyacinth",
     summary="Describe the mounted API base path",
     description="Returns the base path clients should use for health and prediction routes.",
 )
@@ -439,3 +439,4 @@ async def health() -> HealthResponse:
         detector_weights=str(DETECTOR_PATH),
         api_prefix=API_PREFIX or "/",
     )
+
