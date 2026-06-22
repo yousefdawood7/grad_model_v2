@@ -1,0 +1,284 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Water Hyacinth Detection API",
+    "summary": "Classify water-hyacinth presence and estimate coverage risk from uploaded images.",
+    "description": "Notebook-derived EfficientNetV2-S classification plus YOLO detection API for water-hyacinth monitoring. The default deployment base path is /api/v1/water-hyacinth.",
+    "version": "0.3.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1/water-hyacinth",
+      "description": "Default EC2 and Streamlit base path"
+    }
+  ],
+  "paths": {
+    "/api/v1/water-hyacinth": {
+      "get": {
+        "summary": "Describe the mounted API base path",
+        "description": "Returns the base path clients should use for health and prediction routes.",
+        "operationId": "api_index_endpoint_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/water-hyacinth/health": {
+      "get": {
+        "summary": "Check API readiness",
+        "description": "Returns the serving device and whether the classifier and detector are loaded.",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/water-hyacinth/predict": {
+      "post": {
+        "summary": "Predict water-hyacinth coverage for one image",
+        "description": "Runs the notebook-derived classifier and detector on one uploaded JPG/PNG image.",
+        "operationId": "predict_endpoint_predict_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/water-hyacinth/predict/batch": {
+      "post": {
+        "summary": "Predict water-hyacinth coverage for multiple images",
+        "description": "Applies the same inference pipeline used by /predict to multiple uploaded images.",
+        "operationId": "predict_batch_endpoint_predict_batch_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["files"],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BatchPredictionItem"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PredictionResponse": {
+        "type": "object",
+        "title": "PredictionResponse",
+        "required": [
+          "classification",
+          "classification_confidence",
+          "detected_regions",
+          "coverage_percent",
+          "detection_confidence",
+          "risk_level"
+        ],
+        "properties": {
+          "classification": {
+            "type": "string",
+            "description": "Predicted top-1 class label."
+          },
+          "classification_confidence": {
+            "type": "number",
+            "description": "Softmax confidence for the predicted class."
+          },
+          "detected_regions": {
+            "type": "integer",
+            "description": "Number of detector bounding boxes returned at conf=0.25."
+          },
+          "coverage_percent": {
+            "type": "number",
+            "description": "Estimated percentage of the image area covered by detections."
+          },
+          "detection_confidence": {
+            "type": "number",
+            "description": "Mean confidence across detected regions, or 0 when none exist."
+          },
+          "risk_level": {
+            "type": "string",
+            "description": "NONE | LOW | MEDIUM | HIGH | CRITICAL"
+          }
+        }
+      },
+      "BatchPredictionItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PredictionResponse"
+          },
+          {
+            "type": "object",
+            "required": ["image"],
+            "properties": {
+              "image": {
+                "type": "string",
+                "description": "Original uploaded filename associated with this prediction."
+              }
+            }
+          }
+        ]
+      },
+      "HealthResponse": {
+        "type": "object",
+        "title": "HealthResponse",
+        "required": [
+          "status",
+          "device",
+          "classifier_loaded",
+          "detector_loaded",
+          "classifier_weights",
+          "detector_weights",
+          "api_prefix"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "classifier_loaded": {
+            "type": "boolean"
+          },
+          "detector_loaded": {
+            "type": "boolean"
+          },
+          "classifier_weights": {
+            "type": "string"
+          },
+          "detector_weights": {
+            "type": "string"
+          },
+          "api_prefix": {
+            "type": "string"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "properties": {
+          "loc": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {"type": "string"},
+                {"type": "integer"}
+              ]
+            }
+          },
+          "msg": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
